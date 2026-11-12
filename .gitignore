@@ -1,0 +1,12 @@
+# Local datasets, exports and download metadata
+/data/
+
+# Python environment and caches
+/.venv/
+__pycache__/
+*.py[cod]
+
+# Local credentials
+.env
+.env.*
+!.env.example
