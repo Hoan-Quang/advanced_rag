@@ -8,7 +8,7 @@ from pathlib import Path
 from urllib.request import urlopen
 
 DATASET_ID = "nhokjack/ViAdminRAG"
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 DEST = ROOT / "data" / "raw" / "viadminrag"
 
 

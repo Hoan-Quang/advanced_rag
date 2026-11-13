@@ -5,7 +5,7 @@ import json
 from collections import Counter, defaultdict
 from pathlib import Path
 
-ROOT = Path(__file__).resolve().parents[1]
+ROOT = Path(__file__).resolve().parents[2]
 SOURCE = ROOT / "data/raw/viadminrag/ViAdminRag.json"
 DEST = ROOT / "data/processed"
 QUESTION_TYPES = {"Summarization": "Tóm tắt", "Multi-hop QA": "Hỏi đáp nhiều bước"}
