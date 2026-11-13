@@ -1,0 +1,36 @@
+{
+  "dataset_id": "nhokjack/ViAdminRAG",
+  "revision": "280bc8efee6c44813be99cc48604a178dd0ea7ca",
+  "downloaded_at_utc": "2026-11-12T23:18:26.327872+00:00",
+  "files": [
+    {
+      "path": "README.md",
+      "bytes": 2960,
+      "sha256": "70a4996960cc88e941773d073696f6bc673ef992e641234c74a7b90e5c9a5d4c"
+    },
+    {
+      "path": "ViAdminRag.json",
+      "bytes": 3878186,
+      "sha256": "93b6484cb851534bd8dbf2ba13b5d6900bd8d2d5bec145413423a1f53478686e"
+    }
+  ],
+  "summary": {
+    "rows": 400,
+    "question_types": {
+      "Summarization": 200,
+      "Multi-hop QA": 200
+    },
+    "difficulty": {
+      "Medium": 194,
+      "Easy": 90,
+      "Hard": 116
+    },
+    "categories": {
+      "Giáo dục": 400
+    },
+    "duplicate_questions": 0,
+    "unique_source_urls": 50,
+    "unique_contents": 50,
+    "unique_reference_contexts": 384
+  }
+}

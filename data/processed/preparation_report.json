@@ -1,0 +1,11 @@
+{
+  "documents": 50,
+  "queries": 400,
+  "document_deduplication": "exact Content, no text normalization",
+  "query_id_fallbacks": 0,
+  "source_mapping_errors": 0,
+  "urls_with_multiple_contents": {},
+  "documents_with_multiple_urls": {},
+  "source": "data/raw/viadminrag/ViAdminRag.json",
+  "source_sha256": "93b6484cb851534bd8dbf2ba13b5d6900bd8d2d5bec145413423a1f53478686e"
+}
