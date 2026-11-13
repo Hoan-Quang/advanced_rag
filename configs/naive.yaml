@@ -1,0 +1,24 @@
+name: naive
+documents: data/processed/documents.jsonl
+queries: data/processed/queries.jsonl
+chunks: data/processed/chunks/fixed.jsonl
+index_dir: data/indexes/naive
+chunking:
+  # Python Unicode characters, not model tokens. Offsets use [start_char, end_char).
+  size: 1200
+  overlap: 200
+embedding:
+  model: bge-m3:latest
+  batch_size: 16
+retrieval:
+  top_k: 5
+generation:
+  model: qwen2.5:3b
+  temperature: 0
+  seed: 42
+  num_ctx: 8192
+  num_predict: 512
+  max_context_chars: 12000
+ollama:
+  base_url: http://localhost:11434
+  timeout: 300
