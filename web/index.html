@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="vi">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>ViAdminRAG · Hỏi đáp tài liệu</title>
+  <link rel="stylesheet" href="/static/style.css">
+  <script defer src="/static/app.js"></script>
+</head>
+<body>
+  <aside class="sidebar">
+    <a class="brand" href="/"><span class="brand-icon">V</span> ViAdminRAG</a>
+    <div class="side-label">KHÔNG GIAN THỰC NGHIỆM</div>
+    <div class="nav-active">◈ &nbsp; Hỏi đáp tài liệu</div>
+    <div class="config">
+      <p class="side-label">CẤU HÌNH HIỆN TẠI</p>
+      <label for="pipeline">Cấu hình RAG</label>
+      <select id="pipeline">
+        <option value="naive">Naive RAG (baseline)</option>
+        <option value="advanced_chunking">Advanced · Chunking</option>
+        <option value="advanced_query">Advanced · Query</option>
+        <option value="advanced_hybrid">Advanced · Hybrid Search</option>
+        <option value="advanced_rerank">Advanced · Reranking</option>
+        <option value="advanced_all">Advanced · Tất cả module</option>
+      </select>
+      <label>Embedding <strong id="embedding">Đang tải…</strong></label>
+      <label>Generation <strong id="generation">Đang tải…</strong></label>
+      <label for="top-k">Top K <output id="top-k-value">5</output></label>
+      <input id="top-k" type="range" min="1" max="10" value="5">
+      <label class="switch-row"><input id="retrieval-only" type="checkbox"> Chỉ truy xuất</label>
+      <p class="hint">Bật để xem bằng chứng mà chưa sinh câu trả lời.</p>
+      <button class="secondary" id="health">Kiểm tra kết nối</button>
+      <p id="health-status" class="hint" role="status"></p>
+    </div>
+    <div class="sidebar-footer"><span class="status-dot"></span> Chạy local qua Ollama<br><a href="/docs" target="_blank" rel="noopener">Tài liệu API ↗</a></div>
+  </aside>
+  <main>
+    <header><span class="eyebrow">GIÁO DỤC · VĂN BẢN · BẰNG CHỨNG</span><span class="header-tag">RAG Playground</span></header>
+    <section class="intro"><span class="section-label">TRA CỨU CÓ NGUỒN</span>
+      <h1>Hỏi tài liệu.<br><span>Xem rõ nguồn.</span></h1>
+      <p>Đặt câu hỏi về tài liệu giáo dục trong ViAdminRAG.<br>Nhận câu trả lời và khám phá những đoạn bằng chứng phía sau.</p>
+    </section>
+    <form id="ask-form" class="question-card">
+      <label for="question">Bạn muốn tìm hiểu điều gì?</label>
+      <textarea id="question" rows="3" maxlength="4000" required placeholder="Ví dụ: Luật Giáo dục quy định những nội dung gì?"></textarea>
+      <div class="form-footer"><span>Mỗi câu hỏi được xử lý độc lập</span><button type="submit" id="submit" disabled>Tìm và trả lời <span>↗</span></button></div>
+    </form>
+    <div class="examples"><span>Thử hỏi</span><button type="button" data-question="Luật Giáo dục quy định những nội dung gì?">Nội dung Luật Giáo dục ↗</button><button type="button" data-question="Quy định về sách giáo khoa giáo dục phổ thông được nêu như thế nào?">Quy định về sách giáo khoa ↗</button></div>
+    <div id="message" role="status" aria-live="polite" hidden></div>
+    <section id="empty" class="empty"><div class="empty-icon">⌕</div><h3>Bắt đầu từ một câu hỏi</h3><p>Câu trả lời, nguồn truy xuất và thời gian xử lý sẽ xuất hiện tại đây.</p></section>
+    <section id="results" hidden>
+      <div class="result-heading"><h2>Kết quả truy vấn</h2><button id="download" class="secondary">Tải JSON ↓</button></div>
+      <div class="metrics" id="metrics"></div>
+      <p id="trace" class="hint"></p>
+      <div class="tabs" role="tablist" aria-label="Kết quả RAG"><button role="tab" id="tab-answer" aria-controls="answer-panel" aria-selected="true" data-panel="answer-panel">Câu trả lời</button><button role="tab" id="tab-sources" aria-controls="sources-panel" aria-selected="false" data-panel="sources-panel">Nguồn truy xuất</button><button role="tab" id="tab-json" aria-controls="json-panel" aria-selected="false" data-panel="json-panel">Dữ liệu JSON</button></div>
+      <div class="result-card" role="tabpanel" aria-labelledby="tab-answer" id="answer-panel"><p class="asked" id="asked"></p><div id="answer" class="answer-text"></div><p id="token-info" class="hint"></p></div>
+      <div class="result-card" role="tabpanel" aria-labelledby="tab-sources" id="sources-panel" hidden><p id="source-summary" class="hint"></p><div id="sources"></div></div>
+      <div class="result-card" role="tabpanel" aria-labelledby="tab-json" id="json-panel" hidden><pre id="json-output"></pre></div>
+    </section>
+    <footer>ViAdminRAG <span>Dense Retrieval → Ngữ cảnh → Ollama</span></footer>
+  </main>
+</body></html>
