@@ -46,7 +46,9 @@ def run_queries(config, pipeline, client, args):
     manifest_path = output / "manifest.json"
 
     def save_manifest():
-        manifest_path.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary = manifest_path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(manifest, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+        temporary.replace(manifest_path)
 
     save_manifest()
     print(f"Results: {output}", flush=True)
@@ -61,6 +63,7 @@ def run_queries(config, pipeline, client, args):
                 stream.write(json.dumps(result, ensure_ascii=False) + "\n")
                 stream.flush()
                 manifest["completed"] += 1
+                save_manifest()
                 print(f"Completed {manifest['completed']}/{len(rows)}", flush=True)
         manifest["status"] = "complete"
     except BaseException as error:

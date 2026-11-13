@@ -10,6 +10,5 @@ def build_pipeline(config, client):
         retriever = HybridRetriever(retriever, config["retrieval"])
     advanced = (config["retrieval"].get("method") == "hybrid"
                 or config.get("query_processing", {}).get("enabled")
-                or config.get("reranking", {}).get("enabled")
-                or config["chunking"].get("method") == "structure")
+                or config.get("reranking", {}).get("enabled"))
     return (AdvancedPipeline if advanced else NaivePipeline)(config, retriever, client)

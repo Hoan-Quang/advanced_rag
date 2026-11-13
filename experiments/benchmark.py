@@ -14,7 +14,7 @@ def main():
     parser.add_argument("--limit", type=int)
     parser.add_argument("--generation", action="store_true", help="Include answer generation; default retrieval only")
     args = parser.parse_args()
-    for name in ("naive", "advanced_chunking", "advanced_query", "advanced_hybrid", "advanced_rerank", "advanced_all"):
+    for name in ("naive", "advanced_query", "advanced_hybrid", "advanced_rerank", "advanced_all"):
         command = [sys.executable, str(ROOT / "experiments/run.py"), "run", "--config", str(ROOT / f"configs/{name}.yaml")]
         if not args.generation:
             command.append("--retrieval-only")

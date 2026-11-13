@@ -1,3 +1,6 @@
+# Local evaluation outputs and logs
+/results/
+
 # Python environment and caches
 /.test_tmp/
 /.models/

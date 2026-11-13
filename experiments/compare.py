@@ -28,11 +28,20 @@ def main():
                "scored_queries": len(ids), "partial": scores["partial"],
                "label_status": scores["label_status"], **scores["metrics"],
                "mean_total_seconds": sum(row["total_seconds"] for row in selected) / len(selected)}
+        row["timing_query_count"] = len(selected)
+        for stage in ("retrieval_seconds", "query_processing_seconds", "reranking_seconds", "generation_seconds"):
+            row["mean_" + stage] = sum(item.get(stage, 0) for item in selected) / len(selected)
+        answer_path = folder / "answer_metrics.json"
+        if answer_path.is_file():
+            answers = json.loads(answer_path.read_text(encoding="utf-8"))
+            row.update(generation_scored_queries=answers["scored_queries"],
+                       generation_partial=answers["partial"], **answers["metrics"])
         rows.append(row)
     output = Path(args.output)
     output.parent.mkdir(parents=True, exist_ok=True)
     with output.open("w", encoding="utf-8-sig", newline="") as stream:
-        writer = csv.DictWriter(stream, fieldnames=list(rows[0]))
+        columns = list(dict.fromkeys(key for row in rows for key in row))
+        writer = csv.DictWriter(stream, fieldnames=columns)
         writer.writeheader()
         writer.writerows(rows)
     print(f"Saved {len(rows)} configurations: {output}")

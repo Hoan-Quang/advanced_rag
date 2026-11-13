@@ -36,6 +36,8 @@ data/
 
 Dùng **toàn bộ 400 câu hỏi để đánh giá** các cấu hình RAG trên cùng corpus 50 tài liệu, không chia tập phát triển/đánh giá. Khi chạy RAG, chỉ dùng `input` làm truy vấn; `context`, `expected_output` và `source_doc_id` là thông tin tham chiếu để đánh giá, không dùng để chọn sẵn tài liệu hoặc đưa trực tiếp vào prompt.
 
+Bổ sung `data/processed/queries_unrelated.jsonl`: **100 câu hỏi pháp luật gần miền giáo dục nhưng yêu cầu thông tin ngoài phạm vi chi tiết của corpus**, thuộc 10 chủ đề như hợp đồng lao động của giáo viên, bảo hiểm, dữ liệu học sinh, bản quyền học liệu, tranh chấp học phí và tố tụng. Tập này dùng riêng để kiểm tra khả năng từ chối khi thiếu bằng chứng, không thuộc bộ 400 câu gốc và chưa đưa vào benchmark mặc định. Mỗi mẫu có `answerable: false` là nhãn dự kiến, `validation_status` yêu cầu rà soát, `context: []`, `source_doc_id: null`. Cần đối chiếu nội dung trước khi chốt là không trả lời được từ corpus. `expected_output` mô tả thiếu thông tin, không phải đáp án pháp luật bên ngoài; khi chấm không yêu cầu model lặp đúng một câu từ chối cố định.
+
 ## Kế hoạch thực nghiệm
 
 ### 1. Triển khai Naive RAG baseline
@@ -54,12 +56,11 @@ Mỗi cấu hình thêm một module vào baseline, giữ nguyên các thành ph
 
 | Module | Hướng triển khai dự kiến |
 | --- | --- |
-| Chunking nâng cao | Chia theo cấu trúc hoặc ngữ nghĩa |
 | Xử lý query | Viết lại hoặc mở rộng câu hỏi trước khi truy xuất |
 | Hybrid Search | Kết hợp BM25 và Dense Retrieval bằng RRF |
 | Reranking | Xếp hạng lại các đoạn ứng viên |
 
-Mỗi phương pháp chunking lưu bộ chunks và index riêng, đồng thời ánh xạ lại qrels tương ứng. Các cấu hình dùng chung tài liệu nguồn và bộ câu hỏi. Không triển khai truy xuất lặp nhiều bước.
+Tất cả cấu hình dùng chung cách chia đoạn cố định, chunks, index và qrels baseline. Phần chunking nâng cao đã được bỏ khỏi thực nghiệm hiện tại. Không triển khai truy xuất lặp nhiều bước.
 
 ### 3. Kết hợp các module
 
@@ -81,7 +82,7 @@ Code được tổ chức theo chức năng, dùng chung cho Naive và Advanced 
 configs/                   # Cấu hình baseline và từng module Advanced
 src/
   api/                     # FastAPI, service và giao diện trong static/
-  chunking/                # Chia đoạn cố định và theo cấu trúc
+  chunking/                # Chia đoạn cố định dùng chung cho mọi cấu hình
   data_processing/         # Tải, kiểm tra và chuẩn bị dataset
   evaluation/              # Ánh xạ bằng chứng và metric Retrieval
   llm/                     # Ollama client và Generation
@@ -175,19 +176,18 @@ Các module đã có code và cấu hình độc lập, kế thừa baseline đ�
 | Cấu hình | Module được thêm | Index dùng |
 | --- | --- | --- |
 | `naive` | Baseline | `data/indexes/naive` |
-| `advanced_chunking` | Chia ưu tiên điều/khoản, đoạn và ranh giới câu | `data/indexes/structure` |
 | `advanced_query` | Qwen viết lại câu hỏi trước một lượt truy xuất | Index baseline |
 | `advanced_hybrid` | BM25 + Dense, gộp thứ hạng bằng RRF | Index baseline |
 | `advanced_rerank` | Dense Top-20 → Cross-Encoder → Top K | Index baseline |
-| `advanced_all` | Chunking cấu trúc + query + hybrid + rerank | Index cấu trúc |
+| `advanced_all` | Query + hybrid + rerank | Index baseline |
 
-Chunking cấu trúc vẫn giới hạn tối đa 1.200 ký tự và overlap 200; khi không tìm thấy ranh giới phù hợp sẽ chia tại khoảng trắng hoặc theo giới hạn ký tự. Bản hiện tại tạo **325 chunks**, giữ nguyên offset và nội dung nguồn. BM25 dùng token Unicode viết thường, chưa tách từ ghép tiếng Việt; RRF lấy tối đa 20 ứng viên từ mỗi retriever. Điểm hiển thị phân biệt cosine, RRF và Cross-Encoder.
+Mọi cấu hình dùng **301 chunks cố định**, 1.200 ký tự/chunk và overlap 200 ký tự, cùng Dense index baseline. BM25 dùng token Unicode viết thường, chưa tách từ ghép tiếng Việt; RRF lấy tối đa 20 ứng viên từ mỗi retriever. Điểm hiển thị phân biệt cosine, RRF và Cross-Encoder.
 
-Tạo chunks và index cấu trúc một lần cho cả `advanced_chunking` và `advanced_all`:
+Chỉ cần tạo chunks và Dense index baseline một lần (bỏ qua nếu đã có):
 
 ```powershell
-python experiments/run.py chunk --config configs/advanced_chunking.yaml
-python experiments/run.py index --config configs/advanced_chunking.yaml
+python experiments/run.py chunk --config configs/naive.yaml
+python experiments/run.py index --config configs/naive.yaml
 ```
 
 Query processing chỉ viết lại query, không dùng đáp án/context tham chiếu; Generation vẫn nhận câu hỏi gốc. Chế độ `--retrieval-only` của cấu hình query vẫn gọi Qwen để viết lại câu hỏi, nhưng không sinh đáp án cuối cùng. Đây không phải truy xuất lặp nhiều bước.
@@ -210,7 +210,7 @@ python experiments/run.py run --config configs/advanced_all.yaml --limit 3
 
 Web/API dùng trường `pipeline`, ví dụ `{"question": "…", "pipeline": "advanced_hybrid", "top_k": 5}`. Kết quả Advanced ghi query tìm kiếm, điểm từng retriever, hạng trước/sau rerank và thời gian từng bước; không sửa cấu hình trên đĩa. UI báo các bước chuẩn bị thiếu thay vì tự tạo index hoặc tải model.
 
-Sau khi chuẩn bị đủ index và reranker, chạy tuần tự sáu cấu hình:
+Sau khi chuẩn bị đủ index và reranker, chạy tuần tự năm cấu hình:
 
 ```powershell
 python experiments/benchmark.py --limit 3
@@ -220,14 +220,16 @@ python experiments/benchmark.py --generation
 
 Mặc định benchmark chỉ chạy Retrieval; `--generation` chạy cả sinh đáp án. Mỗi cấu hình lưu kết quả riêng, không tự đánh giá hoặc ghi đè lần chạy trước.
 
-Qrels baseline dùng cho query/hybrid/rerank. Tạo qrels riêng cho index cấu trúc bằng `python experiments/build_qrels.py --config configs/advanced_chunking.yaml`; dùng thư mục đó khi chấm `advanced_chunking` và `advanced_all`. Nhãn cấu trúc hiện cũng có 229 câu ánh xạ tự động, 171 câu cần rà soát. Các số này chỉ là độ phủ nhãn, không phải kết quả Retrieval.
+Để chạy và chấm tự động cả năm cấu hình, dùng `python experiments/evaluate_suite.py --generation --output-dir results/evaluation_full`. Công cụ chụp lại cấu hình lúc bắt đầu, chạy tuần tự, lưu log từng pipeline và cập nhật `status.json` theo tiến độ; kết thúc sẽ tạo `comparison.csv`. Bảng so sánh ghi rõ số câu được chấm Retrieval, số câu được chấm Generation và phạm vi các số đo thời gian. Các điểm Retrieval hiện vẫn dùng qrels nháp trên tập con có nhãn, không phải kết quả đã xác nhận cho toàn bộ corpus.
+
+Qrels baseline tại `data/processed/qrels/naive` dùng cho cả năm cấu hình, kể cả `advanced_all`. Các file chunks/index/qrels cấu trúc đã tạo trước đây được giữ để tham khảo, không còn được các cấu hình chạy sử dụng.
 
 ```powershell
-python experiments/evaluate.py --run-dir results/advanced_all/<run_id> --qrels-dir data/processed/qrels/advanced_chunking --k 5 --allow-partial
+python experiments/evaluate.py --run-dir results/advanced_all/<run_id> --qrels-dir data/processed/qrels/naive --k 5 --allow-partial
 python experiments/evaluate_answers.py --run-dir results/advanced_all/<run_id>
 python experiments/compare.py --runs results/naive/<run_id> results/advanced_all/<run_id> --k 5
 ```
 
-So sánh CSV chỉ được tạo khi các lần chạy dùng cùng dữ liệu câu hỏi và cùng tập ID đã được chấm. Recall theo chunk nhạy với cách chia đoạn; khi kết luận về chunking cần xem thêm mức phủ bằng chứng và chất lượng câu trả lời. `evaluate_answers.py` tính Token F1 và Exact Match sau khi bỏ trích dẫn ID, phục vụ chẩn đoán trùng khớp văn bản; chưa đo độ đúng ngữ nghĩa hoặc faithfulness. Các tiêu chí này vẫn cần chấm thủ công hoặc một bộ chấm được thiết kế và kiểm tra riêng.
+So sánh CSV chỉ được tạo khi các lần chạy dùng cùng dữ liệu câu hỏi và cùng tập ID đã được chấm. `evaluate_answers.py` tính Token F1 và Exact Match sau khi bỏ trích dẫn ID, phục vụ chẩn đoán trùng khớp văn bản; chưa đo độ đúng ngữ nghĩa hoặc faithfulness. Các tiêu chí này vẫn cần chấm thủ công hoặc một bộ chấm được thiết kế và kiểm tra riêng.
 
-**Tiến độ:** đã có code từng module Advanced, cấu hình kết hợp, UI/API chọn pipeline và công cụ benchmark/đánh giá. Đã tạo chunks và qrels nháp cho hai cách chia; chưa tải/chạy reranker thật, dựng index cấu trúc hoặc chạy benchmark toàn bộ 400 câu. Qrels còn 171 câu cần xác nhận, chưa có kết quả thực nghiệm để kết luận kỹ thuật nào tốt hơn.
+**Tiến độ:** đã có code xử lý query, Hybrid Search, reranking, cấu hình kết hợp, UI/API chọn pipeline và công cụ benchmark/đánh giá. Tất cả dùng chunks/index cố định của baseline. Qrels còn 171 câu cần xác nhận; chưa có kết quả benchmark đầy đủ để kết luận kỹ thuật nào tốt hơn.

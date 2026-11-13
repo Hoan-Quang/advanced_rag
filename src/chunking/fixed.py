@@ -29,11 +29,7 @@ def split_documents(documents, size, overlap):
 
 
 def build_chunks(config):
-    splitter = split_documents
-    if config["chunking"].get("method") == "structure":
-        from src.chunking.structure import split_structure
-        splitter = split_structure
-    chunks = splitter(read_jsonl(config["documents"]), **{
+    chunks = split_documents(read_jsonl(config["documents"]), **{
         "size": config["chunking"]["size"], "overlap": config["chunking"]["overlap"]
     })
     write_jsonl(config["chunks"], chunks)

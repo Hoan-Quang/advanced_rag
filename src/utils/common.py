@@ -48,8 +48,8 @@ def load_config(path):
         raise ValueError("Require 0 <= chunk overlap < size")
     if config["retrieval"]["top_k"] < 1 or config["embedding"]["batch_size"] < 1:
         raise ValueError("top_k and batch_size must be positive")
-    if config["chunking"].get("method", "fixed") not in {"fixed", "structure"}:
-        raise ValueError("Unknown chunking method")
+    if config["chunking"].get("method", "fixed") != "fixed":
+        raise ValueError("Only fixed chunking is supported in the current experiment")
     if config["retrieval"].get("method", "dense") not in {"dense", "hybrid"}:
         raise ValueError("Unknown retrieval method")
     if config["retrieval"].get("candidate_k", config["retrieval"]["top_k"]) < config["retrieval"]["top_k"]:

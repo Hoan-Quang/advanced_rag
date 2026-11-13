@@ -17,7 +17,7 @@ STATIC_DIR = Path(__file__).resolve().parent / "static"
 
 app = FastAPI(title="ViAdminRAG", version="1.0.0")
 app.mount("/static", StaticFiles(directory=STATIC_DIR), name="static")
-PipelineName = Literal["naive", "advanced_chunking", "advanced_query", "advanced_hybrid", "advanced_rerank", "advanced_all"]
+PipelineName = Literal["naive", "advanced_query", "advanced_hybrid", "advanced_rerank", "advanced_all"]
 PIPELINES = {name: ROOT / "configs" / f"{name}.yaml" for name in PipelineName.__args__}
 
 

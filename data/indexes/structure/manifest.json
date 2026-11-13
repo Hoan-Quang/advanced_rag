@@ -1,0 +1,18 @@
+{
+  "created_at_utc": "2026-11-13T02:02:32.228591+00:00",
+  "embedding": {
+    "name": "bge-m3:latest",
+    "digest": "7907646426070047a77226ac3e684fbbe8410524f7b4a74d02837e43f2146bab"
+  },
+  "chunking": {
+    "size": 1200,
+    "overlap": 200,
+    "method": "structure"
+  },
+  "documents_sha256": "dd62ba3e1ef71e33fd37be1179ad871db1c28ce0c5591ad8776ac16f8afe2d4f",
+  "chunks_sha256": "80a0f826b7433536d4e3c59552b561c7a16ad1975285fd7fa0ccefa061d14727",
+  "vectors_sha256": "3aad2c804bb25fafd180c9485774922e379bc83525350799aca3df17561d265f",
+  "count": 325,
+  "dimensions": 1024,
+  "metric": "cosine"
+}

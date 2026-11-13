@@ -1,4 +1,4 @@
-extends: advanced_chunking.yaml
+extends: naive.yaml
 name: advanced_all
 query_processing:
   enabled: true
