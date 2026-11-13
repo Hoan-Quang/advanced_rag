@@ -1,0 +1,4 @@
+extends: naive.yaml
+name: advanced_query
+query_processing:
+  enabled: true
