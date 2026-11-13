@@ -3,8 +3,8 @@
 from copy import deepcopy
 from threading import Lock
 
-from src.ollama_client import OllamaClient
-from src.factory import build_pipeline
+from src.llm.ollama_client import OllamaClient
+from src.pipelines.factory import build_pipeline
 
 _request_lock = Lock()
 

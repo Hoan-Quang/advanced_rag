@@ -7,7 +7,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-from src.common import ROOT, file_hash, read_jsonl
+from src.utils.common import ROOT, file_hash, read_jsonl
 from src.evaluation.retrieval import evaluate_retrieval
 
 

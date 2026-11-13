@@ -1,6 +1,6 @@
 """Baseline fixed-width Unicode character windows with exact source offsets."""
 
-from src.common import read_jsonl, write_jsonl
+from src.utils.common import read_jsonl, write_jsonl
 
 
 def split_documents(documents, size, overlap):

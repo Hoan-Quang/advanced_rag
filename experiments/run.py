@@ -11,12 +11,12 @@ from uuid import uuid4
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from src.chunking.fixed import build_chunks
-from src.common import ROOT, file_hash, load_config, read_jsonl
-from src.generation import SYSTEM_PROMPT
-from src.factory import build_pipeline
-from src.reranking import reranker_metadata
-from src.ollama_client import OllamaClient
-from src.output import format_answer
+from src.utils.common import ROOT, file_hash, load_config, read_jsonl
+from src.llm.generation import SYSTEM_PROMPT
+from src.pipelines.factory import build_pipeline
+from src.retrieval.reranker import reranker_metadata
+from src.llm.ollama_client import OllamaClient
+from src.utils.output import format_answer
 from src.retrieval.dense import build_index
 
 

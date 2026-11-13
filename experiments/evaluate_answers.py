@@ -9,7 +9,7 @@ from collections import Counter
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from src.common import file_hash, read_jsonl
+from src.utils.common import file_hash, read_jsonl
 
 
 def tokens(text):

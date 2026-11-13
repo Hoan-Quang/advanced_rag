@@ -75,18 +75,22 @@ Chốt trước các cấu hình và tham số cần so sánh, đánh giá trên
 
 ## Chạy Naive RAG
 
-Code baseline đã được tách thành các thành phần dùng chung để bổ sung Advanced RAG sau này:
+Code được tổ chức theo chức năng, dùng chung cho Naive và Advanced RAG:
 
 ```text
-configs/naive.yaml          # Đường dẫn, chunking, model, Top-k và tham số sinh
+configs/                   # Cấu hình baseline và từng module Advanced
 src/
-  chunking/fixed.py         # Chia đoạn cố định và lưu vị trí trong văn bản gốc
-  retrieval/dense.py        # Embedding, lưu index và tìm kiếm cosine bằng NumPy
-  ollama_client.py          # Kết nối HTTP tới Ollama
-  generation.py            # Prompt và gọi model sinh câu trả lời
-  pipeline.py              # Ghép Retrieval với Generation
-experiments/run.py         # Lệnh chia đoạn, tạo index, hỏi và chạy bộ câu hỏi
-tests/test_naive.py         # Kiểm thử offline, không gọi model thật
+  api/                     # FastAPI, service và giao diện trong static/
+  chunking/                # Chia đoạn cố định và theo cấu trúc
+  data_processing/         # Tải, kiểm tra và chuẩn bị dataset
+  evaluation/              # Ánh xạ bằng chứng và metric Retrieval
+  llm/                     # Ollama client và Generation
+  pipelines/               # Naive, Advanced và factory chọn pipeline
+  query/                   # Viết lại query
+  retrieval/               # Dense, BM25/Hybrid và reranking
+  utils/                   # Đọc cấu hình, JSONL và hiển thị terminal
+experiments/               # Lệnh chạy, benchmark, đánh giá và tải reranker
+app.py                     # Entry point tương thích với lệnh app:app cũ
 ```
 
 Cài thư viện và chia đoạn, chưa cần Ollama:
@@ -94,7 +98,6 @@ Cài thư viện và chia đoạn, chưa cần Ollama:
 ```powershell
 python -m pip install -r requirements.txt
 python experiments/run.py chunk
-python -m unittest discover -s tests -v
 ```
 
 Cấu hình khởi đầu dùng **1.200 ký tự/chunk, overlap 200 ký tự, Top-5**. Vị trí `start_char`, `end_char` là chỉ số ký tự Python, trong đó `end_char` không thuộc đoạn. Đây là đơn vị ký tự, không phải token của model. Bản dữ liệu hiện tại tạo **301 chunks** tại `data/processed/chunks/fixed.jsonl`.
@@ -128,7 +131,7 @@ Chạy từ thư mục dự án (Ollama cần hoạt động khi thực hiện t
 ```powershell
 python -m venv --system-site-packages .venv
 .\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn app:app --host 127.0.0.1 --port 8000
+.\.venv\Scripts\python.exe -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 ```
 
 Mở **http://localhost:8000**; Swagger API tại **http://localhost:8000/docs**. Nút kiểm tra kết nối xác nhận model có sẵn; việc mở trang không tự chạy suy luận hoặc dựng lại index. Nếu chưa có index, dùng lệnh `python experiments/run.py index` trước khi đặt câu hỏi. Top-k chọn trên UI chỉ áp dụng cho lượt hỏi đó, không sửa file cấu hình.
@@ -141,7 +144,7 @@ API gồm `GET /api/config`, `GET /api/health` và `POST /api/ask`. Ví dụ bod
 
 API trả `result` (câu trả lời, đoạn truy xuất, thời gian) và `run_settings` (cấu hình lượt hỏi). Web và API cùng origin nên trình duyệt không gọi Ollama trực tiếp. Chạy một worker để khóa xử lý chỉ cho một lượt suy luận tại một thời điểm.
 
-Kiểm thử UI và baseline bằng `.\.venv\Scripts\python.exe -m unittest discover -s tests -v`; các kiểm thử dùng model giả lập, không gọi Ollama thật.
+Lệnh `uvicorn app:app` cũ vẫn hoạt động qua entry point ở thư mục gốc. Giao diện HTML/CSS/JS nằm tại `src/api/static/` và được FastAPI phục vụ trực tiếp.
 
 ## Chuẩn bị đánh giá Retrieval
 

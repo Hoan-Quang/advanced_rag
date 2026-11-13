@@ -6,7 +6,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.common import file_hash, read_jsonl, write_jsonl
+from src.utils.common import file_hash, read_jsonl, write_jsonl
 
 
 def normalize(vectors, count):

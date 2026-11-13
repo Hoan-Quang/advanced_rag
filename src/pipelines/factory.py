@@ -1,4 +1,5 @@
-from src.pipeline import NaivePipeline, AdvancedPipeline
+from src.pipelines.naive import NaivePipeline
+from src.pipelines.advanced import AdvancedPipeline
 from src.retrieval.dense import DenseRetriever
 from src.retrieval.hybrid import HybridRetriever
 

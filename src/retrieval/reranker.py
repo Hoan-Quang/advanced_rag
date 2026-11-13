@@ -5,7 +5,7 @@ from pathlib import Path
 
 import numpy as np
 
-from src.common import ROOT, file_hash
+from src.utils.common import ROOT, file_hash
 
 
 @lru_cache(maxsize=1)
