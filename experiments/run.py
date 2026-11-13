@@ -13,10 +13,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 from src.chunking.fixed import build_chunks
 from src.common import ROOT, file_hash, load_config, read_jsonl
 from src.generation import SYSTEM_PROMPT
+from src.factory import build_pipeline
+from src.reranking import reranker_metadata
 from src.ollama_client import OllamaClient
 from src.output import format_answer
-from src.pipeline import NaivePipeline
-from src.retrieval.dense import DenseRetriever, build_index
+from src.retrieval.dense import build_index
 
 
 def run_queries(config, pipeline, client, args):
@@ -27,13 +28,15 @@ def run_queries(config, pipeline, client, args):
         if args.limit < 1:
             raise ValueError("limit must be positive")
         rows = rows[:args.limit]
-    generation_model = None if args.retrieval_only else client.model_info(config["generation"]["model"])
+    uses_llm = not args.retrieval_only or config.get("query_processing", {}).get("enabled", False)
+    generation_model = client.model_info(config["generation"]["model"]) if uses_llm else None
     run_id = datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ") + "_" + uuid4().hex[:8]
     output = ROOT / "results" / config["name"] / run_id
     output.mkdir(parents=True, exist_ok=False)
     manifest = {
         "config": config, "system_prompt": SYSTEM_PROMPT,
         "index": pipeline.retriever.manifest, "generation_model": generation_model,
+        "reranker": reranker_metadata(config),
         "queries_sha256": file_hash(config["queries"]),
         "python": platform.python_version(), "platform": platform.platform(),
         "query_count": len(rows), "retrieval_only": args.retrieval_only,
@@ -92,8 +95,10 @@ def main():
     client = OllamaClient(**config["ollama"])
     if args.command == "check":
         models = [client.model_info(config["embedding"]["model"])]
-        if not args.retrieval_only:
+        if not args.retrieval_only or config.get("query_processing", {}).get("enabled", False):
             models.append(client.model_info(config["generation"]["model"]))
+        if config.get("reranking", {}).get("enabled"):
+            models.append({"reranker": reranker_metadata(config)})
         print(json.dumps(models, indent=2))
         return
     if args.command == "index":
@@ -101,10 +106,9 @@ def main():
         return
     if args.command == "ask" and not args.question:
         parser.error("ask requires --question")
-    retriever = DenseRetriever(config, client)
-    pipeline = NaivePipeline(config, retriever, client)
+    pipeline = build_pipeline(config, client)
     if args.command == "ask":
-        if not args.retrieval_only:
+        if not args.retrieval_only or config.get("query_processing", {}).get("enabled", False):
             client.model_info(config["generation"]["model"])
         result = pipeline.answer(args.question, args.retrieval_only)
         if args.format == "json":

@@ -1,0 +1,13 @@
+extends: advanced_chunking.yaml
+name: advanced_all
+query_processing:
+  enabled: true
+retrieval:
+  method: hybrid
+  candidate_k: 20
+  rrf_k: 60
+reranking:
+  enabled: true
+  model_path: .models/bge-reranker-v2-m3
+  batch_size: 2
+  max_length: 1024

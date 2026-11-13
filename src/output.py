@@ -19,7 +19,11 @@ def format_answer(result, show_chunks=False, width=100):
     else:
         lines.extend(["Chế độ chỉ truy xuất, chưa sinh câu trả lời.", ""])
 
-    lines.append(f"NGUỒN TRUY XUẤT ({len(chunks)} đoạn; điểm cosine similarity)")
+    if result.get("search_query"):
+        lines.extend(["TRUY VẤN TÌM KIẾM", result["search_query"], ""])
+    score_type = chunks[0].get("score_type", "cosine") if chunks else "cosine"
+    label = {"rrf": "điểm RRF", "cross_encoder": "điểm Cross-Encoder"}.get(score_type, "điểm cosine similarity")
+    lines.append(f"NGUỒN TRUY XUẤT ({len(chunks)} đoạn; {label})")
     for number, chunk in enumerate(chunks, 1):
         lines.append(f"[{number}] Điểm: {chunk['score']:.4f} | "
                      f"Vị trí ký tự: {chunk['start_char']}–{chunk['end_char']}")
@@ -34,6 +38,9 @@ def format_answer(result, show_chunks=False, width=100):
         lines.append("")
 
     timing = [f"Truy xuất: {result['retrieval_seconds']:.2f}s"]
+    if "query_processing_seconds" in result:
+        timing.append(f"Xử lý query: {result['query_processing_seconds']:.2f}s")
+        timing.append(f"Reranking: {result['reranking_seconds']:.2f}s")
     if "generation_seconds" in result:
         timing.append(f"Sinh câu trả lời: {result['generation_seconds']:.2f}s")
     timing.append(f"Tổng: {result['total_seconds']:.2f}s")
