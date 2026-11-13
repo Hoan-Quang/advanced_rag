@@ -1,0 +1,6 @@
+extends: naive.yaml
+name: advanced_chunking
+chunks: data/processed/chunks/structure.jsonl
+index_dir: data/indexes/structure
+chunking:
+  method: structure
