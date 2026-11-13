@@ -101,7 +101,7 @@ Cấu hình khởi đầu dùng **1.200 ký tự/chunk, overlap 200 ký tự, To
 
 Embedding dự kiến dùng `bge-m3:latest`, Generation dùng `qwen2.5:3b`, đều cấu hình được trong `configs/naive.yaml`. Đây là lựa chọn khởi đầu, chưa xác nhận phù hợp tài nguyên máy. Client dùng API chính thức của Ollama: [embed](https://docs.ollama.com/api/embed) và [chat](https://docs.ollama.com/api/chat).
 
-**Chưa khởi chạy Ollama hoặc tải model.** Khi sẵn sàng chạy model, thực hiện các lệnh sau với dịch vụ Ollama đang hoạt động:
+Các lệnh thiết lập và chạy với dịch vụ Ollama đang hoạt động (chỉ cần tải model nếu máy chưa có):
 
 ```powershell
 ollama pull bge-m3:latest
@@ -113,8 +113,10 @@ python experiments/run.py run --limit 3
 python experiments/run.py run
 ```
 
+Lệnh `ask` hiển thị tiếng Việt, tách câu trả lời, nguồn truy xuất và thời gian xử lý. Mặc định chỉ trích ngắn nội dung từng đoạn; dùng `--show-chunks` để xem đầy đủ hoặc `--format json` để lấy dữ liệu gốc. Trích dẫn `[1]`, `[2]` trên màn hình tương ứng thứ tự nguồn; JSON giữ ID chunk gốc.
+
 `--limit 3` chỉ chạy kiểm tra nhanh; bỏ tùy chọn này để chạy đủ 400 câu. Thêm `--retrieval-only` vào `ask` hoặc `run` để bỏ qua Generation, nhưng vẫn cần model embedding. Mỗi lần chạy `run` lưu `predictions.jsonl` và manifest riêng tại `results/naive/<run_id>/`, gồm cấu hình, model digest, checksum dữ liệu, chunk truy xuất, câu trả lời và thời gian xử lý. Nếu chạy lỗi, giữ phần kết quả đã hoàn tất và đánh dấu lần chạy thất bại.
 
 Index kiểm tra model embedding, cấu hình chia đoạn và checksum dữ liệu trước khi truy vấn; cần dựng lại khi nguồn hoặc cấu hình thay đổi. Embedding vượt giới hạn model và ngữ cảnh vượt ngân sách cấu hình sẽ báo lỗi thay vì tự cắt ngầm.
 
-**Tiến độ:** đã có code baseline, tạo chunks và kiểm thử offline. Chưa dựng index bằng model thật, chưa chạy Ollama, chưa tạo qrels hoặc tính metric đánh giá.
+**Tiến độ:** đã có code baseline, 301 chunks và Dense index; đã kiểm thử offline và chạy thử câu hỏi qua Ollama. Chưa tạo qrels hoặc chạy đánh giá đầy đủ 400 câu hỏi.

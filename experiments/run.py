@@ -14,6 +14,7 @@ from src.chunking.fixed import build_chunks
 from src.common import ROOT, file_hash, load_config, read_jsonl
 from src.generation import SYSTEM_PROMPT
 from src.ollama_client import OllamaClient
+from src.output import format_answer
 from src.pipeline import NaivePipeline
 from src.retrieval.dense import DenseRetriever, build_index
 
@@ -69,12 +70,19 @@ def run_queries(config, pipeline, client, args):
 
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(description="Naive RAG: fixed chunks, cosine Dense Retrieval, Ollama")
     parser.add_argument("command", choices=["chunk", "check", "index", "ask", "run"])
     parser.add_argument("--config", default=str(ROOT / "configs/naive.yaml"))
     parser.add_argument("--question", help="Question text for ask")
     parser.add_argument("--limit", type=int, help="Run only the first N questions for a smoke check")
     parser.add_argument("--retrieval-only", action="store_true", help="Skip Generation for ask/run")
+    parser.add_argument("--format", choices=["text", "json"], default="text",
+                        help="ask output format (default: readable Vietnamese text)")
+    parser.add_argument("--show-chunks", action="store_true",
+                        help="Show full chunk text and IDs in ask text output")
     args = parser.parse_args()
     config = load_config(args.config)
     if args.command == "chunk":
@@ -98,8 +106,11 @@ def main():
     if args.command == "ask":
         if not args.retrieval_only:
             client.model_info(config["generation"]["model"])
-        # Escaped Unicode also works on legacy Windows console encodings.
-        print(json.dumps(pipeline.answer(args.question, args.retrieval_only), ensure_ascii=True, indent=2))
+        result = pipeline.answer(args.question, args.retrieval_only)
+        if args.format == "json":
+            print(json.dumps(result, ensure_ascii=False, indent=2))
+        else:
+            print(format_answer(result, show_chunks=args.show_chunks))
     else:
         run_queries(config, pipeline, client, args)
 
