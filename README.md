@@ -1,14 +1,23 @@
-﻿# Advanced RAG trên ViAdminRAG
+# Advanced RAG trên ViAdminRAG
 
 Đề tài Y06.1: tìm hiểu và áp dụng các kỹ thuật Advanced RAG cho bài toán hỏi–đáp văn bản hành chính, pháp lý và giáo dục tiếng Việt. Xây dựng Naive RAG làm baseline, thử từng module cải tiến rồi kết hợp và đánh giá.
 
 ## Dataset
 
-Sử dụng [nhokjack/ViAdminRAG](https://huggingface.co/datasets/nhokjack/ViAdminRAG). Bản dữ liệu hiện tại gồm **400 câu hỏi thuộc lĩnh vực Giáo dục**, được xây dựng từ **50 tài liệu nguồn**. Mỗi mẫu có câu hỏi, đáp án chuẩn, nội dung tài liệu và các đoạn bằng chứng tham chiếu. Hai nhóm Tóm tắt (200 câu) và Hỏi đáp nhiều bước (200 câu) cho phép phân tích khả năng tổng hợp thông tin; độ khó gồm Dễ (90), Trung bình (194) và Khó (116).
+Sử dụng [nhokjack/ViAdminRAG](https://huggingface.co/datasets/nhokjack/ViAdminRAG). Bản dữ liệu đang dùng gồm **400 câu hỏi thuộc lĩnh vực Giáo dục**, được xây dựng từ **50 tài liệu nguồn**. Câu hỏi gồm Tóm tắt (200 câu) và Hỏi đáp nhiều bước (200 câu); độ khó gồm Dễ (90), Trung bình (194) và Khó (116).
 
-Dữ liệu được tách thành **tài liệu để truy xuất** và **câu hỏi để chạy, đánh giá hệ thống**. Cách tổ chức này giúp các cấu hình Naive RAG và Advanced RAG dùng chung đầu vào, đồng thời cho phép thử nhiều cách chia đoạn trên cùng tài liệu gốc.
+Mỗi mẫu dữ liệu gốc gồm các trường:
 
-Tải và xử lý dữ liệu từ thư mục dự án, chỉ cần Python và thư viện chuẩn:
+| Trường                                        | Nội dung                                      |
+| ----------------------------------------------- | ---------------------------------------------- |
+| `ID`                                          | Mã định danh câu hỏi                      |
+| `Content`, `Source URL`                     | Toàn văn tài liệu và đường dẫn nguồn |
+| `Category`, `Question type`, `Difficulty` | Lĩnh vực, loại câu hỏi và độ khó      |
+| `input`                                       | Câu hỏi đầu vào                           |
+| `expected_output`                             | Câu trả lời tham chiếu                     |
+| `context`                                     | Các đoạn bằng chứng tham chiếu           |
+
+Dữ liệu được chuẩn hóa thành **tài liệu để truy xuất** và **câu hỏi để chạy, đánh giá hệ thống**. Tải và xử lý từ thư mục dự án:
 
 ```powershell
 python src/data_processing/download_dataset.py
@@ -17,219 +26,162 @@ python src/data_processing/prepare_dataset.py
 
 ```text
 data/
-  raw/viadminrag/             # Dữ liệu gốc, dataset card và manifest
+  raw/viadminrag/             # Dữ liệu gốc và thông tin nguồn
   processed/
     documents.jsonl          # 50 tài liệu duy nhất để xây corpus
     queries.jsonl            # 400 câu hỏi kèm đáp án và bằng chứng
     preparation_report.json  # Kết quả kiểm tra dữ liệu
 ```
 
-| File                | Trường                                        | Ý nghĩa trong thực nghiệm                                       |
-| ------------------- | ----------------------------------------------- | ------------------------------------------------------------------- |
-| `documents.jsonl` | `doc_id`                                      | ID ổn định của tài liệu, tạo từ SHA-256 của nội dung      |
-|                     | `content`, `source_url`                     | Toàn văn để chia đoạn, lập chỉ mục và truy vết nguồn    |
-| `queries.jsonl`   | `query_id`, `input`                         | ID câu hỏi và truy vấn đưa vào hệ thống                    |
-|                     | `expected_output`                             | Đáp án chuẩn để đánh giá câu trả lời sinh ra            |
-|                     | `context`                                     | Các đoạn bằng chứng để đối chiếu kết quả truy xuất     |
-|                     | `source_doc_id`                               | Liên kết câu hỏi với tài liệu nguồn                         |
-|                     | `category`, `question_type`, `difficulty` | Phân nhóm kết quả theo chủ đề, loại câu hỏi và độ khó |
+| File                | Trường chính                                     | Vai trò                                                                             |
+| ------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `documents.jsonl` | `doc_id`, `content`, `source_url`             | Chia đoạn, lập chỉ mục và truy vết nguồn; ID tạo từ SHA-256 của nội dung |
+| `queries.jsonl`   | `query_id`, `input`                             | Xác định câu hỏi và truy vấn đầu vào                                       |
+| `queries.jsonl`   | `expected_output`, `context`, `source_doc_id` | Đáp án, bằng chứng và tài liệu nguồn dùng để đánh giá                 |
+| `queries.jsonl`   | `category`, `question_type`, `difficulty`     | Phân nhóm kết quả                                                                |
 
-Dùng **toàn bộ 400 câu hỏi để đánh giá** các cấu hình RAG trên cùng corpus 50 tài liệu, không chia tập phát triển/đánh giá. Khi chạy RAG, chỉ dùng `input` làm truy vấn; `context`, `expected_output` và `source_doc_id` là thông tin tham chiếu để đánh giá, không dùng để chọn sẵn tài liệu hoặc đưa trực tiếp vào prompt.
+Tập thực nghiệm mục tiêu là toàn bộ 400 câu hỏi, không chia tập phát triển/đánh giá. Khi chạy RAG, chỉ dùng `input` làm truy vấn; đáp án, bằng chứng và ID tài liệu tham chiếu không được đưa vào pipeline để chọn sẵn nguồn. Hiện có qrels nháp cho 229 câu để chấm Retrieval; chưa có tập kiểm tra độc lập để xác nhận khả năng khái quát.
 
-Bổ sung `data/processed/queries_unrelated.jsonl`: **100 câu hỏi pháp luật gần miền giáo dục nhưng yêu cầu thông tin ngoài phạm vi chi tiết của corpus**, thuộc 10 chủ đề như hợp đồng lao động của giáo viên, bảo hiểm, dữ liệu học sinh, bản quyền học liệu, tranh chấp học phí và tố tụng. Tập này dùng riêng để kiểm tra khả năng từ chối khi thiếu bằng chứng, không thuộc bộ 400 câu gốc và chưa đưa vào benchmark mặc định. Mỗi mẫu có `answerable: false` là nhãn dự kiến, `validation_status` yêu cầu rà soát, `context: []`, `source_doc_id: null`. Cần đối chiếu nội dung trước khi chốt là không trả lời được từ corpus. `expected_output` mô tả thiếu thông tin, không phải đáp án pháp luật bên ngoài; khi chấm không yêu cầu model lặp đúng một câu từ chối cố định.
+Ngoài ra, `queries_unrelated.jsonl` chứa 100 câu hỏi gần miền giáo dục để kiểm tra khả năng từ chối khi thiếu bằng chứng. Tập này chưa thuộc benchmark mặc định; nhãn không trả lời được từ corpus vẫn cần rà soát.
 
 ## Kế hoạch thực nghiệm
 
 ### 1. Triển khai Naive RAG baseline
 
-1. **Chốt cấu hình:** kiểm tra CPU, RAM và GPU để chọn embedding model và một model Generation chạy local qua Ollama. Ghi lại model, kích thước chunk, overlap, Top-k, prompt và tham số sinh.
-2. **Chia tài liệu thành chunk:** đọc `documents.jsonl`, chia theo độ dài cố định và cho các đoạn liền kề chồng lấn một phần (overlap). Lưu `chunks.jsonl` với `chunk_id`, `doc_id`, `text`, vị trí bắt đầu/kết thúc trong tài liệu và nguồn. Chốt đơn vị đo độ dài cùng kích thước trước khi chạy.
-3. **Tạo embedding và index:** chuyển nội dung từng chunk thành vector bằng embedding model đã chọn. Lưu vector index cùng ánh xạ từ vector tới `chunk_id` để sử dụng lại khi truy vấn.
-4. **Truy xuất Dense Top-k:** lấy `input` của mỗi câu hỏi, tạo vector bằng cùng embedding model và tìm k chunk gần nhất trong toàn bộ index. Lưu ID chunk, thứ hạng, điểm tương đồng và thời gian truy xuất. Baseline dùng câu hỏi gốc, không rerank.
-5. **Sinh câu trả lời:** ghép các chunk Top-k với câu hỏi theo một prompt cố định, gọi model Ollama chạy local. Yêu cầu trả lời dựa trên bằng chứng truy xuất, dẫn ID chunk và nêu rõ khi thiếu thông tin. Lưu câu trả lời, các chunk đã sử dụng và thời gian Generation.
-6. **Chuẩn bị nhãn đánh giá Retrieval:** đối chiếu `context` tham chiếu với các chunk để tạo `qrels.jsonl` gồm `query_id`, `chunk_id`, `relevance`. Kiểm tra các trường hợp bằng chứng trải qua nhiều chunk hoặc không khớp; không mặc định khớp chuỗi chính xác. Nhãn này chỉ phục vụ đánh giá.
-7. **Chạy và lưu kết quả baseline:** xử lý toàn bộ 400 câu hỏi, lưu kết quả theo `query_id` cùng cấu hình chạy để làm mốc so sánh cho các module Advanced RAG.
+Baseline chia tài liệu thành các đoạn **1.200 ký tự, overlap 200 ký tự**, tạo 301 chunks tại `data/processed/chunks/fixed.jsonl`. Dùng embedding `bge-m3:latest` qua Ollama và tìm **Dense Top-5** bằng cosine similarity. Câu hỏi gốc được dùng trực tiếp để truy xuất, không viết lại hoặc rerank.
 
-### 2. Thử từng module Advanced RAG
+Generation dùng `qwen2.5:3b`, ghép câu hỏi với các đoạn truy xuất theo một prompt cố định. Model được yêu cầu trả lời bằng tiếng Việt, dẫn ID đoạn và nêu rõ khi thiếu bằng chứng. Cấu hình tại `configs/naive.yaml`, với `temperature: 0`, `seed: 42`, `num_ctx: 8192` và `num_predict: 512`.
 
-Mỗi cấu hình thêm một module vào baseline, giữ nguyên các thành phần còn lại để xác định đóng góp riêng.
-
-| Module | Hướng triển khai dự kiến |
-| --- | --- |
-| Xử lý query | Viết lại hoặc mở rộng câu hỏi trước khi truy xuất |
-| Hybrid Search | Kết hợp BM25 và Dense Retrieval bằng RRF |
-| Reranking | Xếp hạng lại các đoạn ứng viên |
-
-Tất cả cấu hình dùng chung cách chia đoạn cố định, chunks, index và qrels baseline. Phần chunking nâng cao đã được bỏ khỏi thực nghiệm hiện tại. Không triển khai truy xuất lặp nhiều bước.
-
-### 3. Kết hợp các module
-
-Tích hợp các module đã triển khai thành pipeline Advanced RAG hoàn chỉnh, có cấu hình bật/tắt từng module. Giữ cùng model Ollama, mẫu prompt và tham số Generation giữa baseline, từng module và cấu hình kết hợp; ngữ cảnh đầu vào thay đổi theo kết quả của mỗi pipeline.
-
-### 4. Đánh giá và phân tích
-
-Chốt trước các cấu hình và tham số cần so sánh, đánh giá trên toàn bộ 400 câu hỏi:
-
-- **Retrieval:** Recall@k, MRR@k, nDCG@k và thời gian truy xuất, dựa trên qrels đã kiểm tra.
-- **Generation:** độ chính xác so với `expected_output`, mức bám bằng chứng truy xuất và thời gian sinh câu trả lời. Chốt cách chấm trước khi chạy đánh giá.
-- **So sánh:** baseline, baseline cộng từng module và pipeline kết hợp; phân tích theo loại câu hỏi và độ khó, kèm các trường hợp lỗi tiêu biểu.
-
-## Chạy Naive RAG
-
-Code được tổ chức theo chức năng, dùng chung cho Naive và Advanced RAG:
-
-```text
-configs/                   # Cấu hình baseline và từng module Advanced
-src/
-  api/                     # FastAPI, service và giao diện trong static/
-  chunking/                # Chia đoạn cố định dùng chung cho mọi cấu hình
-  data_processing/         # Tải, kiểm tra và chuẩn bị dataset
-  evaluation/              # Ánh xạ bằng chứng và metric Retrieval
-  llm/                     # Ollama client và Generation
-  pipelines/               # Naive, Advanced và factory chọn pipeline
-  query/                   # Viết lại query
-  retrieval/               # Dense, BM25/Hybrid và reranking
-  utils/                   # Đọc cấu hình, JSONL và hiển thị terminal
-experiments/               # Lệnh chạy, benchmark, đánh giá và tải reranker
-app.py                     # Entry point tương thích với lệnh app:app cũ
-```
-
-Cài thư viện và chia đoạn, chưa cần Ollama:
+Chuẩn bị thư viện, model và index khi dịch vụ Ollama đang hoạt động:
 
 ```powershell
 python -m pip install -r requirements.txt
-python experiments/run.py chunk
-```
-
-Cấu hình khởi đầu dùng **1.200 ký tự/chunk, overlap 200 ký tự, Top-5**. Vị trí `start_char`, `end_char` là chỉ số ký tự Python, trong đó `end_char` không thuộc đoạn. Đây là đơn vị ký tự, không phải token của model. Bản dữ liệu hiện tại tạo **301 chunks** tại `data/processed/chunks/fixed.jsonl`.
-
-Embedding dự kiến dùng `bge-m3:latest`, Generation dùng `qwen2.5:3b`, đều cấu hình được trong `configs/naive.yaml`. Đây là lựa chọn khởi đầu, chưa xác nhận phù hợp tài nguyên máy. Client dùng API chính thức của Ollama: [embed](https://docs.ollama.com/api/embed) và [chat](https://docs.ollama.com/api/chat).
-
-Các lệnh thiết lập và chạy với dịch vụ Ollama đang hoạt động (chỉ cần tải model nếu máy chưa có):
-
-```powershell
 ollama pull bge-m3:latest
-ollama pull qwen2.5:3b
+ollama run qwen2.5:3b
+python experiments/run.py chunk
 python experiments/run.py check
 python experiments/run.py index
+```
+
+Chạy một câu hỏi hoặc toàn bộ tập dữ liệu:
+
+```powershell
 python experiments/run.py ask --question "Quy định về học phí được nêu như thế nào?"
-python experiments/run.py run --limit 3
 python experiments/run.py run
 ```
 
-Lệnh `ask` hiển thị tiếng Việt, tách câu trả lời, nguồn truy xuất và thời gian xử lý. Mặc định chỉ trích ngắn nội dung từng đoạn; dùng `--show-chunks` để xem đầy đủ hoặc `--format json` để lấy dữ liệu gốc. Trích dẫn `[1]`, `[2]` trên màn hình tương ứng thứ tự nguồn; JSON giữ ID chunk gốc.
+→ Lệnh `ask` hiển thị câu trả lời, nguồn và thời gian xử lý.
 
-`--limit 3` chỉ chạy kiểm tra nhanh; bỏ tùy chọn này để chạy đủ 400 câu. Thêm `--retrieval-only` vào `ask` hoặc `run` để bỏ qua Generation, nhưng vẫn cần model embedding. Mỗi lần chạy `run` lưu `predictions.jsonl` và manifest riêng tại `results/naive/<run_id>/`, gồm cấu hình, model digest, checksum dữ liệu, chunk truy xuất, câu trả lời và thời gian xử lý. Nếu chạy lỗi, giữ phần kết quả đã hoàn tất và đánh dấu lần chạy thất bại.
+→ Lệnh `run` lưu `predictions.jsonl` và `manifest.json` tại `results/<tên_cấu_hình>/<run_id>/`.
 
-Index kiểm tra model embedding, cấu hình chia đoạn và checksum dữ liệu trước khi truy vấn; cần dựng lại khi nguồn hoặc cấu hình thay đổi. Embedding vượt giới hạn model và ngữ cảnh vượt ngân sách cấu hình sẽ báo lỗi thay vì tự cắt ngầm.
+### 2. Thử từng module Advanced RAG
 
-## Giao diện web local
+Mỗi cấu hình thêm một module vào baseline, dùng chung chunks, Dense index và qrels để so sánh đóng góp của từng kỹ thuật.
 
-**FastAPI phục vụ giao diện web và API trên cùng cổng 8000**, dùng pipeline Naive RAG và cấu hình `configs/naive.yaml`. Cho phép nhập câu hỏi, chọn Top-k, chạy chỉ truy xuất hoặc sinh câu trả lời, xem các đoạn nguồn và tải kết quả JSON. Mỗi câu hỏi độc lập; không gửi lịch sử hoặc đáp án tham chiếu vào model.
+| Cấu hình          | Module và cách triển khai                                                                                                        |
+| ------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `advanced_query`  | Qwen viết lại câu hỏi một lần trước truy xuất; Generation vẫn nhận câu hỏi gốc                                        |
+| `advanced_hybrid` | Kết hợp BM25 và Dense bằng RRF (`rrf_k: 60`), lấy tối đa 20 ứng viên từ mỗi retriever với cấu hình Top-5 hiện tại |
+| `advanced_rerank` | Dense Top-20 → Cross-Encoder `BAAI/bge-reranker-v2-m3`(CPU) → Top-5                                                             |
 
-Chạy từ thư mục dự án (Ollama cần hoạt động khi thực hiện truy vấn):
-
-```powershell
-python -m venv --system-site-packages .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
-.\.venv\Scripts\python.exe -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
-```
-
-Mở **http://localhost:8000**; Swagger API tại **http://localhost:8000/docs**. Nút kiểm tra kết nối xác nhận model có sẵn; việc mở trang không tự chạy suy luận hoặc dựng lại index. Nếu chưa có index, dùng lệnh `python experiments/run.py index` trước khi đặt câu hỏi. Top-k chọn trên UI chỉ áp dụng cho lượt hỏi đó, không sửa file cấu hình.
-
-API gồm `GET /api/config`, `GET /api/health` và `POST /api/ask`. Ví dụ body gửi tới `/api/ask`:
-
-```json
-{"question": "Luật Giáo dục quy định những nội dung gì?", "top_k": 5, "retrieval_only": false}
-```
-
-API trả `result` (câu trả lời, đoạn truy xuất, thời gian) và `run_settings` (cấu hình lượt hỏi). Web và API cùng origin nên trình duyệt không gọi Ollama trực tiếp. Chạy một worker để khóa xử lý chỉ cho một lượt suy luận tại một thời điểm.
-
-Lệnh `uvicorn app:app` cũ vẫn hoạt động qua entry point ở thư mục gốc. Giao diện HTML/CSS/JS nằm tại `src/api/static/` và được FastAPI phục vụ trực tiếp.
-
-## Chuẩn bị đánh giá Retrieval
-
-Tạo nhãn liên quan giữa câu hỏi và các chunk bằng công cụ offline:
+Chuẩn bị model Reranker:
 
 ```powershell
-python experiments/build_qrels.py
+python -m pip install -r requirements-advanced.txt
+python experiments/prepare_reranker.py
 ```
 
-Kết quả tại `data/processed/qrels/naive/`: `qrels.jsonl` chứa nhãn nháp, `alignments.jsonl` ghi vị trí bằng chứng trong văn bản gốc, `needs_review.jsonl` chứa các trường hợp cần rà soát và `report.json` ghi phương pháp, độ phủ cùng checksum dữ liệu.
-
-Chỉ tự động ánh xạ khi toàn bộ bằng chứng của câu hỏi xuất hiện duy nhất trong tài liệu nguồn sau khi chuẩn hóa khoảng trắng và được chunks bao phủ. Một bằng chứng có thể trải qua nhiều chunks. Chunk có giao với bằng chứng tối thiểu 40 ký tự (hoặc toàn bộ bằng chứng nếu ngắn hơn) được gán relevance 1. Bằng chứng không khớp, xuất hiện nhiều lần hoặc thiếu độ phủ được đưa vào danh sách rà soát; điểm tương đồng gợi ý không tự trở thành nhãn đúng.
-
-Bản hiện tại có **229 câu tự động ánh xạ, 171 câu cần rà soát**, tạo 371 dòng qrels. Đây là nhãn nháp tự động, chưa được xác nhận thủ công. Cả 400 câu vẫn là tập đánh giá mục tiêu; chưa đủ nhãn để công bố Recall/MRR/nDCG cho toàn bộ tập.
-
-Sau khi có kết quả chạy từ `experiments/run.py`, đánh giá bằng:
+Chọn cấu hình bằng `--config`, ví dụ:
 
 ```powershell
-python experiments/evaluate.py --run-dir results/naive/<run_id> --k 5
+python experiments/run.py run --config configs/advanced_hybrid.yaml
 ```
 
-Mặc định công cụ yêu cầu đủ nhãn và kết quả cho cả 400 câu. `--allow-partial` cho phép xem kết quả chẩn đoán trên phần có nhãn và dự đoán, luôn ghi rõ số câu được chấm và các câu thiếu. Không xem điểm trên tập con là điểm của toàn bộ dataset. Kết quả gồm Recall, MRR, nDCG, Hit@k, phân nhóm theo loại câu hỏi và độ khó; chưa chấm Generation. Khi thay phương pháp chunking cần tạo lại qrels tương ứng.
+### 3. Kết hợp các module của Advanced RAG
 
-## Chạy Advanced RAG
+Cấu hình **`advanced_all`** kết hợp viết lại query → Hybrid Search → rerank → sinh đáp án. Đây là tên dùng trong code của pipeline kết hợp được gọi là `advanced_full`.
 
-Các module đã có code và cấu hình độc lập, kế thừa baseline để giữ cùng embedding, model Generation và prompt:
+Để so sánh năm cấu hình, dùng `python experiments/benchmark.py --generation`. Mỗi cấu hình được chạy tuần tự và lưu kết quả riêng.
 
-| Cấu hình | Module được thêm | Index dùng |
-| --- | --- | --- |
-| `naive` | Baseline | `data/indexes/naive` |
-| `advanced_query` | Qwen viết lại câu hỏi trước một lượt truy xuất | Index baseline |
-| `advanced_hybrid` | BM25 + Dense, gộp thứ hạng bằng RRF | Index baseline |
-| `advanced_rerank` | Dense Top-20 → Cross-Encoder → Top K | Index baseline |
-| `advanced_all` | Query + hybrid + rerank | Index baseline |
+### 4. Giao diện web local
 
-Mọi cấu hình dùng **301 chunks cố định**, 1.200 ký tự/chunk và overlap 200 ký tự, cùng Dense index baseline. BM25 dùng token Unicode viết thường, chưa tách từ ghép tiếng Việt; RRF lấy tối đa 20 ứng viên từ mỗi retriever. Điểm hiển thị phân biệt cosine, RRF và Cross-Encoder.
+FastAPI phục vụ web và API trên cùng cổng 8000, hỗ trợ chọn một trong năm pipeline, Top-k và chế độ chỉ truy xuất hoặc sinh câu trả lời. Giao diện hiển thị các đoạn nguồn, thời gian và cho tải kết quả JSON. Mỗi lượt hỏi độc lập, không gửi lịch sử hoặc đáp án tham chiếu vào model.
 
-Chỉ cần tạo chunks và Dense index baseline một lần (bỏ qua nếu đã có):
+Sau khi chuẩn bị model và index, chạy từ thư mục dự án:
 
 ```powershell
-python experiments/run.py chunk --config configs/naive.yaml
-python experiments/run.py index --config configs/naive.yaml
+python -m uvicorn src.api.main:app --host 127.0.0.1 --port 8000
 ```
 
-Query processing chỉ viết lại query, không dùng đáp án/context tham chiếu; Generation vẫn nhận câu hỏi gốc. Chế độ `--retrieval-only` của cấu hình query vẫn gọi Qwen để viết lại câu hỏi, nhưng không sinh đáp án cuối cùng. Đây không phải truy xuất lặp nhiều bước.
+Mở **http://localhost:8000**; tài liệu API tại **http://localhost:8000/docs**. Việc mở trang không tự chạy suy luận, tạo index hoặc tải model. Giữ một worker để khóa xử lý một lượt suy luận tại một thời điểm.
 
-Reranker dùng [BAAI/bge-reranker-v2-m3](https://huggingface.co/BAAI/bge-reranker-v2-m3) qua Cross-Encoder, chạy **CPU**, batch 2, tối đa 1.024 token mỗi cặp câu hỏi–đoạn. Model chỉ được tải qua bước chuẩn bị riêng, không tự tải khi mở UI hoặc gửi câu hỏi:
+### 5. Đánh giá và phân tích
+
+So sánh baseline, từng module và cấu hình kết hợp theo hai nhóm:
+
+- **Retrieval:** Recall@5, MRR@5, nDCG@5, Hit@5 và thời gian truy xuất; phân tích thêm theo loại câu hỏi và độ khó.
+- **Generation:** Token F1 và thời gian sinh.
+
+| Metric                | Ý nghĩa                                                                                                                                                                                                                                 |
+| --------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Recall@5              | Tỷ lệ chunk liên quan được tìm thấy trong Top-5 so với toàn bộ chunk liên quan theo qrels của câu hỏi. Đo mức độ thu thập đủ bằng chứng.                                                                          |
+| MRR@5                 | Nghịch đảo thứ hạng của chunk liên quan đầu tiên trong Top-5; bằng 0 nếu không tìm thấy. Đo khả năng đưa bằng chứng đúng lên đầu.                                                                              |
+| nDCG@5                | Điểm chất lượng thứ hạng trong Top-5, ưu tiên chunk liên quan ở vị trí cao và chuẩn hóa theo thứ hạng lý tưởng.                                                                                                      |
+| Hit@5                 | Tỷ lệ câu hỏi có ít nhất một chunk liên quan trong Top-5; không yêu cầu tìm đủ mọi bằng chứng.                                                                                                                          |
+| Thời gian truy xuất | Số giây trung bình để embedding câu hỏi và tìm ứng viên; thời gian viết lại query và rerank được báo cáo riêng.                                                                                                      |
+| Token F1              | Trung bình điều hòa giữa precision và recall của token trùng giữa câu trả lời và đáp án tham chiếu, có xét số lần xuất hiện. Chỉ đo trùng khớp văn bản, chưa phản ánh đầy đủ độ đúng ngữ nghĩa. |
+| Thời gian sinh       | Số giây trung bình để model sinh câu trả lời từ câu hỏi và bằng chứng đã truy xuất.                                                                                                                                      |
+
+Trước khi đánh giá, Qrels được xây bằng cách ánh xạ `context` tham chiếu vào các chunk, chỉ tự động nhận khi từng bằng chứng khớp duy nhất sau chuẩn hóa khoảng trắng và được bao phủ đầy đủ.
+
+Để chạy và chấm tự động năm cấu hình:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pip install -r requirements-advanced.txt
-.\.venv\Scripts\python.exe experiments/prepare_reranker.py
+python experiments/evaluate_suite.py --generation --output-dir results/evaluation_full
 ```
 
-Checkpoint lưu tại `.models/` được Git bỏ qua; script ghi revision vào `source.json`. Bộ nhớ CPU và thời gian rerank cần được đo trên máy thực tế. Cấu hình hiện tại chưa ép embedding Ollama chạy CPU hoặc quản lý nhả model, vì vậy vẫn cần theo dõi VRAM khi chạy Qwen và BGE-M3.
+## Kết quả thực nghiệm
 
-Chạy thử từng cấu hình, hoặc chọn cấu hình trong dropdown **Cấu hình RAG** trên web:
+### Chất lượng truy xuất và câu trả lời
 
-```powershell
-python experiments/run.py ask --config configs/advanced_hybrid.yaml --question "Luật Giáo dục quy định những nội dung gì?"
-python experiments/run.py run --config configs/advanced_all.yaml --limit 3
-```
+| Chỉ số | `naive` | `advanced_query` | `advanced_hybrid` | `advanced_rerank` | `advanced_all` |
+| -------- | --------- | ------------------ | ------------------- | ------------------- | ---------------- |
+| Recall@5 | 0.8464    | 0.7838             | 0.8661              | 0.8967              | **0.9041** |
+| MRR@5    | 0.7631    | 0.7031             | 0.8119              | 0.8544              | **0.8635** |
+| nDCG@5   | 0.7407    | 0.6832             | 0.7894              | 0.8310              | **0.8402** |
+| Hit@5    | 0.9345    | 0.8734             | 0.9345              | 0.9563              | **0.9607** |
+| Token F1 | 0.6022    | 0.5992             | 0.6082              | 0.6060              | **0.6124** |
 
-Web/API dùng trường `pipeline`, ví dụ `{"question": "…", "pipeline": "advanced_hybrid", "top_k": 5}`. Kết quả Advanced ghi query tìm kiếm, điểm từng retriever, hạng trước/sau rerank và thời gian từng bước; không sửa cấu hình trên đĩa. UI báo các bước chuẩn bị thiếu thay vì tự tạo index hoặc tải model.
+### Thời gian trung bình (giây/câu)
 
-Sau khi chuẩn bị đủ index và reranker, chạy tuần tự năm cấu hình:
+| Giai đoạn     | `naive`      | `advanced_query` | `advanced_hybrid` | `advanced_rerank` | `advanced_all` |
+| --------------- | -------------- | ------------------ | ------------------- | ------------------- | ---------------- |
+| Xử lý query   | —             | 0.22               | 0.00                | —                  | 0.22             |
+| Truy xuất      | 0.02           | 0.02               | 0.03                | 3.03                | 3.04             |
+| Rerank          | —             | —                 | —                  | 4.93                | 4.94             |
+| Sinh đáp án  | 0.85           | 0.80               | 0.87                | 4.19                | 4.20             |
+| **Tổng** | **0.87** | **1.04**     | **0.89**      | **12.15**     | **12.40**  |
 
-```powershell
-python experiments/benchmark.py --limit 3
-python experiments/benchmark.py
-python experiments/benchmark.py --generation
-```
+### Nhận xét
 
-Mặc định benchmark chỉ chạy Retrieval; `--generation` chạy cả sinh đáp án. Mỗi cấu hình lưu kết quả riêng, không tự đánh giá hoặc ghi đè lần chạy trước.
+- **Hybrid phù hợp với dữ liệu có nhiều tên riêng và số hiệu văn bản.** Các tài liệu giáo dục thường dùng chung những cụm như “Bộ Giáo dục và Đào tạo”, “Thông tư” hoặc “quy định”, nên gần nhau về ngữ nghĩa dù nói về các văn bản khác nhau. BM25 bổ sung tín hiệu từ số hiệu, tên môn học và thuật ngữ xuất hiện trực tiếp trong câu hỏi, giúp hạn chế việc Dense chỉ chọn đoạn cùng chủ đề nhưng sai văn bản.
+- **Reranking giúp phân biệt các đoạn cùng chủ đề nhưng khác nội dung cần trả lời.** Trong corpus, nội dung về Giáo dục công dân và Giáo dục kinh tế và pháp luật lặp lại ở nhiều bài viết, trong khi câu hỏi có thể yêu cầu vai trò, mục tiêu hoặc đối tượng áp dụng. Cross-Encoder xét trực tiếp từng cặp câu hỏi–đoạn để xếp lại ứng viên theo yêu cầu cụ thể. Chi phí xử lý cao hơn vì phải chấm nhiều cặp văn bản trên CPU.
+- **Viết lại query chưa hiệu quả vì có thể làm mất chi tiết phân biệt trong câu hỏi gốc.** Chẳng hạn, ở `QA_0570`, Qwen bỏ phần “bao gồm Đạo đức, Giáo dục công dân và Giáo dục kinh tế và pháp luật”, chỉ giữ tên chung “môn Giáo dục công dân”. Trong kết quả local, Naive tìm được chunk có nhãn liên quan nhưng truy vấn viết lại thì không. Chi tiết bị bỏ vốn giúp nhận diện đoạn nói về vai trò xuyên suốt các cấp học; đây là một cơ chế lỗi có thể giải thích kết quả của module, chưa phải nguyên nhân đã xác nhận cho mọi câu.
 
-Để chạy và chấm tự động cả năm cấu hình, dùng `python experiments/evaluate_suite.py --generation --output-dir results/evaluation_full`. Công cụ chụp lại cấu hình lúc bắt đầu, chạy tuần tự, lưu log từng pipeline và cập nhật `status.json` theo tiến độ; kết thúc sẽ tạo `comparison.csv`. Bảng so sánh ghi rõ số câu được chấm Retrieval, số câu được chấm Generation và phạm vi các số đo thời gian. Các điểm Retrieval hiện vẫn dùng qrels nháp trên tập con có nhãn, không phải kết quả đã xác nhận cho toàn bộ corpus.
+### Ví dụ phân tích truy xuất
 
-Qrels baseline tại `data/processed/qrels/naive` dùng cho cả năm cấu hình, kể cả `advanced_all`. Các file chunks/index/qrels cấu trúc đã tạo trước đây được giữ để tham khảo, không còn được các cấu hình chạy sử dụng.
+**Ví dụ 1 — `QA_0572`: phân biệt đoạn mô tả chung với đoạn trả lời đúng trọng tâm**
 
-```powershell
-python experiments/evaluate.py --run-dir results/advanced_all/<run_id> --qrels-dir data/processed/qrels/naive --k 5 --allow-partial
-python experiments/evaluate_answers.py --run-dir results/advanced_all/<run_id>
-python experiments/compare.py --runs results/naive/<run_id> results/advanced_all/<run_id> --k 5
-```
+> Hãy tóm tắt các đặc điểm và mục tiêu của môn Giáo dục kinh tế và pháp luật ở giai đoạn giáo dục định hướng nghề nghiệp.
 
-So sánh CSV chỉ được tạo khi các lần chạy dùng cùng dữ liệu câu hỏi và cùng tập ID đã được chấm. `evaluate_answers.py` tính Token F1 và Exact Match sau khi bỏ trích dẫn ID, phục vụ chẩn đoán trùng khớp văn bản; chưa đo độ đúng ngữ nghĩa hoặc faithfulness. Các tiêu chí này vẫn cần chấm thủ công hoặc một bộ chấm được thiết kế và kiểm tra riêng.
+- **Naive:** Top-5 không có chunk được gán nhãn. Đoạn đứng đầu nói về môn học lựa chọn và các ngành nghề liên quan, nhưng bỏ lỡ đoạn tham chiếu mô tả giai đoạn giáo dục định hướng nghề nghiệp.
+- **Advanced full:** đưa chunk có nhãn lên hạng 1. Đoạn này nêu rõ môn học được lựa chọn theo nguyện vọng, định hướng nghề nghiệp và giới thiệu nội dung kinh tế, pháp luật phù hợp với lứa tuổi.
+- **Insight:** tên môn học xuất hiện ở nhiều đoạn và nhiều bài viết, nên chỉ khớp chủ đề chưa đủ. Với truy vấn đã viết lại, chunk đúng đứng hạng 12 ở Dense và hạng 3 ở BM25; sau RRF đứng hạng 5, rồi được rerank đưa lên đầu. Trường hợp này cho thấy tín hiệu từ khóa và bước đánh giá cặp câu hỏi–đoạn giúp ưu tiên bằng chứng sát trọng tâm hơn.
 
-**Tiến độ:** đã có code xử lý query, Hybrid Search, reranking, cấu hình kết hợp, UI/API chọn pipeline và công cụ benchmark/đánh giá. Tất cả dùng chunks/index cố định của baseline. Qrels còn 171 câu cần xác nhận; chưa có kết quả benchmark đầy đủ để kết luận kỹ thuật nào tốt hơn.
+**Ví dụ 2 — `QA_0530`: tìm đúng đoạn quy định trách nhiệm của từng chủ thể**
+
+> Theo quy định về phổ cập giáo dục và giáo dục bắt buộc trong Luật Giáo dục 2019 (sửa đổi), nhà nước, công dân và gia đình có những trách nhiệm gì?
+
+- **Naive:** không có chunk được gán nhãn trong Top-5. Đoạn đứng đầu trong kết quả tìm kiếm ở một bài viết khác có nội dung tương tự về nghĩa vụ học tập và trách nhiệm gia đình, nhưng không phải bằng chứng từ tài liệu nguồn.
+- **Advanced full:** đưa hai chunk có nhãn vào hạng 2 và 4. Các đoạn này chứa phần quy định trách nhiệm của Nhà nước, công dân và gia đình trong bài viết nguồn về giáo dục bắt buộc.
+- **Insight:** một chunk đúng đứng hạng 2 ở BM25 nhưng không xuất hiện trong Top-20 Dense dùng để gộp; sau RRF đứng hạng 11 và được rerank đưa lên hạng 2. Hybrid giúp bổ sung bằng chứng mà Dense bỏ lỡ, còn rerank đưa bằng chứng đó vào ngữ cảnh cuối. Đồng thời, việc Naive lấy được đoạn gần tương đương ở bài khác cho thấy “trượt qrels” không đồng nghĩa câu trả lời chắc chắn sai.
