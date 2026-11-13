@@ -1,0 +1,5 @@
+extends: naive.yaml
+name: advanced_hybrid
+retrieval:
+  method: hybrid
+  rrf_k: 60
