@@ -1,0 +1,9 @@
+extends: naive.yaml
+name: advanced_rerank
+retrieval:
+  candidate_k: 20
+reranking:
+  enabled: true
+  model_path: .models/bge-reranker-v2-m3
+  batch_size: 2
+  max_length: 1024
